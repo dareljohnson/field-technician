@@ -1,0 +1,434 @@
+:spring_version: current
+:toc:
+:project_id: gs-rest-service
+:icons: font
+:source-highlighter: prettify
+
+= Field Technician App Backend (Spring Boot, Java 24, Gradle 8)
+
+// ---
+// LATEST CHANGES
+// ---
+* All Java packages have been renamed from `com.example.restservice` to `com.technican.restservice` throughout the codebase (main and test sources).
+* All import and package statements have been updated accordingly.
+* All tests pass and the project builds successfully after the refactor.
+
+This project implements a secure, test-driven backend for a Field Technician App using Java 24, Spring Boot, and Gradle 8. It supports:
+
+- **User Management**: Register, list, and manage users with roles (ADMIN, TECHNICIAN, MANAGER).
+- **Authentication**: JWT-based login and stateless session management.
+- **Job Management**: CRUD operations for jobs, with status tracking and assignment.
+- **Role-Based Access Control (RBAC)**: Endpoint access is restricted by user role.
+- **Security Best Practices**: Password hashing, input validation, IDOR protection, and secure JWT handling.
+- **Test-Driven Development**: All features are covered by automated tests.
+- **In-memory H2 database with full CRUD and web console**
+
+
+== Quick Start (Updated for com.technican.restservice)
+
+1. **Build & Test:**
+
+   - Requires Java 24 and Gradle 8.14.2+
+   - Run from the `complete` directory:
+     ----
+     ./gradlew.bat clean build   # Windows
+     ./gradlew clean build       # Linux/macOS
+     ----
+   - To run tests only:
+     ----
+     ./gradlew.bat test
+     ----
+   - All Java source and test files now use the `com.technican.restservice` package. If you fork or extend this project, use the new package for all new code.
+
+2. **Run the Application:**
+   ----
+   ./gradlew.bat bootRun
+   ----
+   The server will start on `http://localhost:8080`.
+
+
+== API Overview
+
+* `/greeting` (GET): Public test endpoint (no authentication required).
+* `/users` (POST): Register a new user (first admin is public, all others require admin JWT).
+* `/login` (POST): Authenticate and receive JWT.
+* `/users` (GET): List users (ADMIN only).
+* `/jobs` (GET, POST): List/create jobs (role-restricted).
+* `/jobs/{id}` (GET, PUT, DELETE): View/update/delete jobs (role-restricted).
+
+* `/jobs/{id}/assign` (POST): Assign a technician to a job (admin/scheduler only). The backend will validate that the technician exists and has the TECHNICIAN role. If not, a 400 Bad Request is returned.
+
+All endpoints except `/greeting`, `/login`, and `/users` (POST) require a valid JWT in the `Authorization: Bearer <token>` header.
+
+
+== Assignment Validation Example
+
+Attempting to assign a job to a non-existent technician or a user who is not a technician will result in:
+----
+HTTP/1.1 400 Bad Request
+{
+  "error": "Technician does not exist or does not have TECHNICIAN role"
+}
+----
+
+1. Register a user:
+   ----
+   POST /users
+   { "username": "tech1", "password": "pass", "roles": ["TECHNICIAN"] }
+   ----
+2. Login:
+   ----
+   POST /login
+   { "username": "tech1", "password": "pass" }
+   ----
+   Response: `{ "token": "<JWT>" }`
+3. Use JWT for protected endpoints:
+   ----
+   Authorization: Bearer <JWT>
+   ----
+
+
+== Testing
+
+All features and bug fixes are covered by automated tests, including:
+
+- User registration and login
+- Role-based access control
+- Job creation and listing
+- Job assignment validation (cannot assign to non-existent or non-technician users)
+
+All features are covered by automated tests. Run:
+----
+./gradlew.bat test
+----
+- All tests run against the H2 in-memory database for full integration coverage.
+
+== Database & Persistence
+
+This backend uses an embedded H2 in-memory database (via Spring Data JPA) for all CRUD operations. All data is lost on server restart, making it ideal for development and testing.
+
+- **H2 Console:**
+  - Access at: `http://localhost:8080/h2-console`
+  - JDBC URL: `jdbc:h2:mem:fieldtechdb`
+  - Username: `sa` (no password)
+- **JPA Entities:** All models (`User`, `Job`, etc.) are persisted as JPA entities.
+- **Repositories:** All CRUD operations use Spring Data JPA repositories.
+
+- **H2 SQL Commands:**
+  - https://h2database.com/html/commands.html
+
+== Legacy /greeting Endpoint
+
+[NOTE]
+====
+The following sections are preserved for historical reference and describe the original Spring Boot `/greeting` tutorial. The actual backend now implements a full Field Technician App as described above.
+====
+
+This guide walks you through the process of creating a "`Hello, World`" RESTful web service with Spring.
+
+== What You Will Build
+
+You will build a service that will accept HTTP GET requests at
+`http://localhost:8080/greeting`.
+
+It will respond with a JSON representation of a greeting, as the following listing shows:
+
+====
+[source,json]
+----
+{"id":1,"content":"Hello, World!"}
+----
+====
+
+You can customize the greeting with an optional `name` parameter in the query string, as
+the following listing shows:
+
+====
+[source,text]
+----
+http://localhost:8080/greeting?name=User
+----
+====
+
+The `name` parameter value overrides the default value of `World` and is reflected in the
+response, as the following listing shows:
+
+====
+[source,json]
+----
+{"id":1,"content":"Hello, User!"}
+----
+====
+
+== What You Need
+
+include::https://raw.githubusercontent.com/spring-guides/getting-started-macros/main/prereq_editor_jdk_buildtools.adoc[]
+
+include::https://raw.githubusercontent.com/spring-guides/getting-started-macros/main/how_to_complete_this_guide.adoc[]
+
+[[scratch]]
+== Starting with Spring Initializr
+
+You can use this https://start.spring.io/#!type=maven-project&groupId=com.example&artifactId=rest-service&name=rest-service&description=Demo%20project%20for%20Spring%20Boot&packageName=com.example.rest-service&dependencies=web[pre-initialized project] and click Generate to download a ZIP file. This project is configured to fit the examples in this tutorial.
+
+To manually initialize the project:
+
+. Navigate to https://start.spring.io.
+This service pulls in all the dependencies you need for an application and does most of the setup for you.
+. Choose either Gradle or Maven and the language you want to use. This guide assumes that you chose Java.
+. Click *Dependencies* and select *Spring Web*.
+. Click *Generate*.
+. Download the resulting ZIP file, which is an archive of a web application that is configured with your choices.
+
+NOTE: If your IDE has the Spring Initializr integration, you can complete this process from your IDE.
+
+NOTE: You can also fork the project from Github and open it in your IDE or other editor.
+
+[[initial]]
+== Create a Resource Representation Class
+
+Now that you have set up the project and build system, you can create your web service.
+
+Begin the process by thinking about service interactions.
+
+The service will handle `GET` requests for `/greeting`, optionally with a `name` parameter
+in the query string. The `GET` request should return a `200 OK` response with JSON in the
+body that represents a greeting. It should resemble the following output:
+
+====
+[source,json]
+----
+{
+    "id": 1,
+    "content": "Hello, World!"
+}
+----
+====
+
+The `id` field is a unique identifier for the greeting, and `content` is the textual
+representation of the greeting.
+
+To model the greeting representation, create a resource representation class. To do so,
+provide a Java record class or a Kotlin data class for the `id` and `content` data, as the following listing shows:
+
+[source,java,indent=0,subs="verbatim,quotes",role="primary"]
+.Java
+----
+include::complete/src/main/java/com/example/restservice/Greeting.java[]
+----
+[source,kotlin,indent=0,subs="verbatim,quotes",role="secondary"]
+.Kotlin
+----
+include::complete-kotlin/src/main/kotlin/com/example/restservice/Greeting.kt[]
+----
+
+====
+NOTE: This application uses the https://github.com/FasterXML/jackson[Jackson JSON] library to
+automatically marshal instances of type `Greeting` into JSON. Jackson is included by default by the web starter.
+====
+
+== Create a Resource Controller
+
+In Spring's approach to building RESTful web services, HTTP requests are handled by a
+controller. These components are identified by the
+https://docs.spring.io/spring/docs/{spring_version}/javadoc-api/org/springframework/web/bind/annotation/RestController.html[`@RestController`]
+annotation, and the `GreetingController` class shown in the following listing handles `GET` requests
+for `/greeting` by returning a new instance of the `Greeting` class:
+
+[source,java,indent=0,subs="verbatim,quotes",role="primary"]
+.Java
+----
+include::complete/src/main/java/com/example/restservice/GreetingController.java[]
+----
+[source,kotlin,indent=0,subs="verbatim,quotes",role="secondary"]
+.Kotlin
+----
+include::complete-kotlin/src/main/kotlin/com/example/restservice/GreetingController.kt[]
+----
+
+This controller is concise and simple, but there is plenty going on under the hood. We
+break it down step by step.
+
+The `@GetMapping` annotation ensures that HTTP GET requests to `/greeting` are mapped to the `greeting()` method.
+
+NOTE: There are companion annotations for other HTTP verbs (e.g. `@PostMapping` for POST). There is also a `@RequestMapping` annotation that they all derive from, and can serve as a synonym (e.g. `@RequestMapping(method=GET)`).
+
+`@RequestParam` binds the value of the query string parameter `name` into the `name`
+parameter of the `greeting()` method. If the `name` parameter is absent in the request,
+the `defaultValue` of `World` is used.
+
+The implementation of the method body creates and returns a new `Greeting` object with
+`id` and `content` attributes based on the next value from the `counter` and formats the
+given `name` by using the greeting `template`.
+
+A key difference between a traditional MVC controller and the RESTful web service
+controller shown earlier is the way that the HTTP response body is created. Rather than
+relying on a view technology to perform server-side rendering of the greeting data to
+HTML, this RESTful web service controller populates and returns a `Greeting` object. The
+object data will be written directly to the HTTP response as JSON.
+
+This code uses Spring
+https://docs.spring.io/spring/docs/{spring_version}/javadoc-api/org/springframework/web/bind/annotation/RestController.html[`@RestController`]
+annotation, which marks the class as a controller where every method returns a domain
+object instead of a view. It is shorthand for including both `@Controller` and
+`@ResponseBody`.
+
+The `Greeting` object must be converted to JSON. Thanks to Spring's HTTP message converter
+support, you need not do this conversion manually. Because
+https://github.com/FasterXML/jackson[Jackson 2] is on the classpath, Spring's
+https://docs.spring.io/spring/docs/{spring_version}/javadoc-api/org/springframework/http/converter/json/MappingJackson2HttpMessageConverter.html[`MappingJackson2HttpMessageConverter`]
+is automatically chosen to convert the `Greeting` instance to JSON.
+
+== Run the Service
+
+The Spring Initializr creates an application class for you. In this case, you do not need
+to further modify the class. The following listing shows the `RestServiceApplication` application class:
+
+[source,java,indent=0,subs="verbatim,quotes",role="primary"]
+.Java
+----
+include::complete/src/main/java/com/example/restservice/RestServiceApplication.java[]
+----
+[source,kotlin,indent=0,subs="verbatim,quotes",role="secondary"]
+.Kotlin
+----
+include::complete-kotlin/src/main/kotlin/com/example/restservice/RestServiceApplication.kt[]
+----
+
+include::https://raw.githubusercontent.com/spring-guides/getting-started-macros/main/spring-boot-application-new-path.adoc[]
+
+include::https://raw.githubusercontent.com/spring-guides/getting-started-macros/main/build_an_executable_jar_subhead.adoc[]
+
+include::https://raw.githubusercontent.com/spring-guides/getting-started-macros/main/build_an_executable_jar_with_both.adoc[]
+
+Logging output is displayed. The service should be up and running within a few seconds.
+
+
+== Test the Service
+
+Now that the service is up, visit `http://localhost:8080/greeting`, where you should see:
+
+====
+[source,json]
+----
+{"id":1,"content":"Hello, World!"}
+----
+====
+
+Provide a `name` query string parameter by visiting
+`http://localhost:8080/greeting?name=User`. Notice how the value of the `content`
+attribute changes from `Hello, World!` to `Hello, User!`, as the following listing shows:
+
+====
+[source,json]
+----
+{"id":2,"content":"Hello, User!"}
+----
+====
+
+This change demonstrates that the `@RequestParam` arrangement in `GreetingController` is
+working as expected. The `name` parameter has been given a default value of `World` but
+can be explicitly overridden through the query string.
+
+Notice also how the `id` attribute has changed from `1` to `2`. This proves that you are
+working against the same `GreetingController` instance across multiple requests and that
+its `counter` field is being incremented on each call as expected.
+
+== Summary
+
+Congratulations! You have just developed a RESTful web service with Spring.
+
+== See Also
+
+The following guides may also be helpful:
+
+* https://spring.io/guides/gs/accessing-gemfire-data-rest/[Accessing GemFire Data with REST]
+* https://spring.io/guides/gs/accessing-mongodb-data-rest/[Accessing MongoDB Data with REST]
+* https://spring.io/guides/gs/accessing-data-mysql/[Accessing data with MySQL]
+* https://spring.io/guides/gs/accessing-data-rest/[Accessing JPA Data with REST]
+* https://spring.io/guides/gs/accessing-neo4j-data-rest/[Accessing Neo4j Data with REST]
+* https://spring.io/guides/gs/consuming-rest/[Consuming a RESTful Web Service]
+* https://spring.io/guides/gs/consuming-rest-angularjs/[Consuming a RESTful Web Service with AngularJS]
+* https://spring.io/guides/gs/consuming-rest-jquery/[Consuming a RESTful Web Service with jQuery]
+* https://spring.io/guides/gs/consuming-rest-restjs/[Consuming a RESTful Web Service with rest.js]
+* https://spring.io/guides/gs/securing-web/[Securing a Web Application]
+* https://spring.io/guides/tutorials/rest/[Building REST services with Spring]
+* https://spring.io/guides/tutorials/react-and-spring-data-rest/[React.js and Spring Data REST]
+* https://spring.io/guides/gs/spring-boot/[Building an Application with Spring Boot]
+* https://spring.io/guides/gs/testing-restdocs/[Creating API Documentation with Restdocs]
+* https://spring.io/guides/gs/rest-service-cors/[Enabling Cross Origin Requests for a RESTful Web Service]
+* https://spring.io/guides/gs/rest-hateoas/[Building a Hypermedia-Driven RESTful Web Service]
+* https://spring.io/guides/gs/circuit-breaker/[Circuit Breaker]
+
+include::https://raw.githubusercontent.com/spring-guides/getting-started-macros/main/footer.adoc[]
+
+== User Registration Payload Format
+
+IMPORTANT: The `roles` field must be an array of valid roles (e.g., `["ADMIN"]`).
+
+.Example: Register first admin
+----
+POST /users
+{
+  "username": "admin",
+  "password": "adminpass",
+  "roles": ["ADMIN"]
+}
+----
+
+- Do NOT use `role` (singular) or a string value. Always use `roles` (plural) and an array.
+- Valid roles: `ADMIN`, `TECHNICIAN`, `CUSTOMER`, `SCHEDULER`
+
+
+== Troubleshooting
+
+- If you receive a 400 error when assigning a job, ensure the technician exists and has the TECHNICIAN role.
+
+- **Admin Login 403 / No JWT Returned**:
+  - Ensure you are using the correct admin username and password.
+  - The first admin can be created without authentication; all others require an authenticated admin JWT.
+  - After registering, login at `/login` with `{ "username": "admin", "password": "adminpass" }`.
+  - If you receive a 403 or no JWT, check that the admin user exists in the USERS table and has the `ADMIN` role (not `ROLE_ADMIN`).
+  - JWTs are required in the `Authorization: Bearer <token>` header for all protected endpoints.
+  - If you manually edit the database, ensure roles are stored as `ADMIN` (uppercase, no prefix).
+  - All logic is covered by automated tests; run `gradlew.bat test` to verify.
+
+- If you see `{ "error": "Admin authentication required" }` when creating the first admin, check that your payload uses `roles` as an array and not `role` as a string.
+- All other users require an authenticated admin JWT in the `Authorization` header.
+
+== Production Deployment
+
+To run this app in a production environment:
+
+1. **Build the JAR:**
+   - From the `complete` directory, run:
+     ----
+     ./gradlew.bat clean build
+     ----
+   - The packaged JAR will be in `build/libs/gs-rest-service-0.1.0.jar`.
+
+2. **Run the JAR:**
+   - On your production server (with Java 24+ installed):
+     ----
+     java -jar build/libs/gs-rest-service-0.1.0.jar
+     ----
+   - The server will start on port 8080 by default. To use a different port:
+     ----
+     java -jar build/libs/gs-rest-service-0.1.0.jar --server.port=80
+     ----
+
+3. **Environment Configuration:**
+   - For production, you may want to override properties (e.g., database, JWT secret) using environment variables or a custom `application.properties` file. See Spring Boot docs for details.
+   - Example (override DB URL):
+     ----
+     java -jar build/libs/gs-rest-service-0.1.0.jar --spring.datasource.url=jdbc:postgresql://host/db
+     ----
+
+4. **Production Recommendations:**
+   - Use a persistent database (not H2 in-memory) for real deployments.
+   - Set a strong JWT secret and do not use the default in production.
+   - Use HTTPS and a reverse proxy (e.g., Nginx) for security.
+   - Set up process management (systemd, pm2, etc.) to keep the app running.
+   - Monitor logs and health endpoints.
+
+See Spring Boot documentation for advanced deployment options (Docker, cloud, etc.).
